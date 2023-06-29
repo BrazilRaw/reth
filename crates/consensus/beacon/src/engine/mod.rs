@@ -743,6 +743,7 @@ where
         } else {
             // trigger a full block download for missing hash, or the parent of its lowest buffered
             // ancestor
+            // TODO: use a range request
             self.sync.download_full_block(target);
         }
 
@@ -1102,6 +1103,10 @@ where
                             //    of missing blocks is less than the pipeline threshold
                             //    * this case represents a potentially long range of blocks to
                             //      download and execute
+
+                            // TODO: use a range request
+                            // TODO: add method for the range count, and integrate that into the
+                            // upcoming `exceeds_pipeline_run_threshold` method
                             self.sync.download_full_block(missing_parent.hash);
                         }
                     }
