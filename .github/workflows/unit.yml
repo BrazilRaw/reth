@@ -13,12 +13,9 @@ concurrency:
 
 name: unit
 jobs:
-  test:
-    name: test (partition ${{ matrix.partition }}/${{ strategy.job-total }})
+  build:
+    name: build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        partition: [1, 2, 3, 4]
     steps:
       - name: Checkout sources
         uses: actions/checkout@v3
@@ -35,12 +32,45 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - name: Build and archive tests
+        run: |
+          source <(cargo llvm-cov show-env --export-prefix)
+          cargo llvm-cov clean --workspace
+          cargo nextest archive --locked --workspace --all-features \
+            --archive-file nextest-archive.tar.zst
+      - name: Upload archive
+        uses: actions/upload-artifact@v3
+        with:
+          name: nextest-archive
+          path: nextest-archive.tar.zst
+  test:
+    name: test (partition ${{ matrix.partition }}/${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        partition: [1, 2, 3, 4]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      - run: mkdir -p ~/.cargo/bin
+      - name: Install latest nextest release
+        uses: taiki-e/install-action@nextest
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Download archive
+        uses: actions/download-artifact@v3
+        with:
+          name: nextest-archive
+
       - name: Run tests
         run: |
-          cargo llvm-cov nextest --lcov --output-path lcov.info \
-            --locked --workspace --all-features \
+          ~/.cargo/bin/cargo-nextest nextest run --archive-file nextest-archive.tar.zst \
             --partition hash:${{ matrix.partition }}/${{ strategy.job-total }} \
             -E 'kind(lib)' -E 'kind(bin)' -E 'kind(proc-macro)'
+           ~/.cargo/bin/cargo-llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage data to codecov
         uses: codecov/codecov-action@v3
